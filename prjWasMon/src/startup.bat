@@ -1,0 +1,2 @@
+java -version
+java -cp .;..\bin;..\libs\com.ibm.jaxws.thinclient_7.0.0.jar;..\libs\com.ibm.ws.admin.client_7.0.0.jar;..\libs\com.ibm.ws.webservices.thinclient_7.0.0.jar;..\libs\j2ee.jar;..\libs\was_public.jar;..\libs\ibmjsseprovider2.jar;..\libs\fastjson-1.2.37.jar;..\libs\jide_demo.jar;..\libs\ini4j-0.5.4.jar;..\libs\commons-lang-2.6\commons-lang-2.6-javadoc.jar;..\libs\commons-lang-2.6\commons-lang-2.6-sources.jar;..\libs\commons-lang-2.6\commons-lang-2.6.jar PerfReader
