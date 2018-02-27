@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/jdk1.6.0_45"/>
+	<classpathentry kind="lib" path="libs/com.ibm.jaxws.thinclient_7.0.0.jar"/>
+	<classpathentry kind="lib" path="libs/com.ibm.ws.admin.client_7.0.0.jar"/>
+	<classpathentry kind="lib" path="libs/com.ibm.ws.webservices.thinclient_7.0.0.jar"/>
+	<classpathentry kind="lib" path="libs/j2ee.jar"/>
+	<classpathentry kind="lib" path="libs/was_public.jar"/>
+	<classpathentry kind="lib" path="libs/ibmjsseprovider2.jar"/>
+	<classpathentry kind="lib" path="libs/fastjson-1.2.37.jar"/>
+	<classpathentry kind="lib" path="libs/jide_demo.jar"/>
+	<classpathentry kind="lib" path="libs/ini4j-0.5.4.jar"/>
+	<classpathentry kind="lib" path="libs/commons-lang-2.6/commons-lang-2.6-javadoc.jar"/>
+	<classpathentry kind="lib" path="libs/commons-lang-2.6/commons-lang-2.6-sources.jar"/>
+	<classpathentry kind="lib" path="libs/commons-lang-2.6/commons-lang-2.6.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
