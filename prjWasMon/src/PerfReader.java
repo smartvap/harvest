@@ -28,6 +28,7 @@ import java.net.URL;
 import java.net.UnknownHostException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
@@ -66,6 +67,7 @@ import javax.swing.JPopupMenu;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JTree;
@@ -1370,7 +1372,8 @@ public final class PerfReader extends JFrame implements Runnable {
 	private static class PerfPanel extends JPanel {
 		private static final long serialVersionUID = -1737823149753250108L;
 		private String columnNames[] = { "性能指标" }; // 列标题
-		private static JTable table = null; // 性能列表
+		private static JTable table = null; // 核心性能列表
+		private static JTable tableJDBC = null; // JDBC性能列表
 		private static PerfPanel self = null;
 		
 		/**
@@ -1410,17 +1413,46 @@ public final class PerfReader extends JFrame implements Runnable {
 		}
 
 		private PerfPanel() {
-			if (getComponentCount() == 1) // 重置性能视图
-				remove(0);
+//			if (getComponentCount() == 1) // 重置性能视图
+//				remove(0);
+			/* 核心性能列表 */
 			Object data[][] = new Object[1][1]; // 初始状态
 			if (table == null)
 				table = new JTable(data, columnNames);
 			table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 			table.setAutoscrolls(true);
 			table.setBackground(Color.LIGHT_GRAY);
-			JScrollPane pane = new JScrollPane(table);
-			add(pane, BorderLayout.NORTH);
+			Font font = new Font(table.getFont().getName(), table.getFont().getStyle(),
+					table.getFont().getSize() - 2); // 设置字体缩小
+			table.setFont(font);
+			table.setRowHeight(table.getRowHeight() - 2); // 调整行高
+			font = null;
+			
+			/* 数据库连接池性能列表 */
+			if (tableJDBC == null)
+				tableJDBC = new JTable(data, columnNames);
+			tableJDBC.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+			tableJDBC.setAutoscrolls(true);
+			tableJDBC.setBackground(Color.LIGHT_GRAY);
+			font = new Font(tableJDBC.getFont().getName(), tableJDBC.getFont().getStyle(),
+					tableJDBC.getFont().getSize() - 2); // 设置字体缩小
+			tableJDBC.setFont(font);
+			tableJDBC.setRowHeight(tableJDBC.getRowHeight() - 2); // 调整行高
+			
+			/* 设置上下分割窗 */
+			JSplitPane vSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT); // 垂直分割，分两个Tab页展现
+			vSplitPane.setDividerLocation(0.5); // 分割比例
+			vSplitPane.setBackground(Color.gray);
+			JTabbedPane tabbedUp = new JTabbedPane(); // 上选项卡
+			tabbedUp.addTab("核心性能列表", new JScrollPane(table));
+			JTabbedPane tabbedDn = new JTabbedPane(); // 下选项卡
+			tabbedDn.addTab("数据库连接池性能列表", new JScrollPane(tableJDBC));
+			vSplitPane.setLeftComponent(tabbedUp); // 上选项卡
+			vSplitPane.setRightComponent(tabbedDn); // 右侧性能指标列表
+			
+			/* 将分割窗添加到当前控制面板 */
 			setVisible(true);
+			add(vSplitPane, BorderLayout.NORTH); // 添加分割栏
 			setLayout(new GridLayout(1, 1, 1, 1));
 			self = this;
 		}
@@ -1447,20 +1479,43 @@ public final class PerfReader extends JFrame implements Runnable {
 			if (data == null || data.size() == 0) // 数据合法性检查
 				return;
 			removeAllColumns(); // 清除所有列,用于重置JTable
-			Set<String> setAll = new LinkedHashSet<String>(); // 所有记录的列合并
+			/*  */
+			Set<String> setKern = new LinkedHashSet<String>(); // 核心部分
+			Set<String> setJDBC = new LinkedHashSet<String>(); // JDBC部分
 			for (Map<String, String> each : data) { // 所有记录的键值可能不同
-				setAll.addAll(each.keySet()); // 列合并
+				Set<String> setKernEach = new LinkedHashSet<String>();
+				Set<String> setJDBCEach = new LinkedHashSet<String>();
+				Set<String> setCol = each.keySet();
+				for (String col : setCol) {
+					if (col.equals("node_name") || col.equals("server_name")) {
+						setKernEach.add(col);
+						setJDBCEach.add(col);
+					} else {
+						if (col.indexOf("_jdbc_pool") != -1) setJDBCEach.add(col);
+						else setKernEach.add(col);
+					}
+				}
+				setKern.addAll(setKernEach); // 列合并
+				setJDBC.addAll(setJDBCEach);
 			}
-			Object[] columnNames = setAll.toArray();
-			Object[][] values = new Object[data.size()][columnNames.length];
+			Object[] colNamesKern = setKern.toArray();
+			Object[] colNamesJDBC = setJDBC.toArray();
+			Object[][] valuesKern = new Object[data.size()][colNamesKern.length];
+			Object[][] valuesJDBC = new Object[data.size()][colNamesJDBC.length];
 			for (int row = 0; row < data.size(); row++) {
-				for (int col = 0; col < columnNames.length; col++) {
-					values[row][col] = data.get(row).get(columnNames[col]);
+				for (int col = 0; col < colNamesKern.length; col++) {
+					valuesKern[row][col] = data.get(row).get(colNamesKern[col]);
+				}
+				for (int col = 0; col < colNamesJDBC.length; col++) {
+					valuesJDBC[row][col] = data.get(row).get(colNamesJDBC[col]);
 				}
 			}
-			DefaultTableModel model = new DefaultTableModel(values, columnNames);
-			table.setModel(model);
+			DefaultTableModel modelKern = new DefaultTableModel(valuesKern, colNamesKern);
+			DefaultTableModel modelJDBC = new DefaultTableModel(valuesJDBC, colNamesJDBC);
+			table.setModel(modelKern);
+			tableJDBC.setModel(modelJDBC);
 			fitTableColumns(table); // 调整列宽
+			fitTableColumns(tableJDBC);
 			highLight(); // 高亮异常指标
 		}
 		
@@ -1902,10 +1957,12 @@ public final class PerfReader extends JFrame implements Runnable {
 			map.put("最大堆分配", upperBound);
 			String usedMemoryKBytes = getStrFromListJSON(JSONPath
 					.read(json, "$..jvmRuntimeModule.UsedMemory.count"));
-			map.put("堆使用率",
-					Math.round(Double.parseDouble(usedMemoryKBytes)
-							/ Double.parseDouble(upperBoundKBytes) * 100)
-							+ " %");
+			if (usedMemoryKBytes != null && upperBoundKBytes != null) {
+				map.put("堆使用率",
+						Math.round(Double.parseDouble(usedMemoryKBytes)
+								/ Double.parseDouble(upperBoundKBytes) * 100)
+								+ " %");
+			}
 			String processCpuUsage = getStrFromListJSON(JSONPath.read(json,
 					"$..jvmRuntimeModule.ProcessCpuUsage.count"));
 			if (processCpuUsage != null) processCpuUsage += " %";
@@ -1922,14 +1979,17 @@ public final class PerfReader extends JFrame implements Runnable {
 			map.put("WC池上限", webcontainerPoolUpper);
 			String webcontainerPoolUsed = getStrFromListJSON(JSONPath.read(json,
 					"$..WebContainer.PoolSize.value"));
-			map.put("WC池已用",
-					Math.round(Double.parseDouble(webcontainerPoolUsed)
-							/ Double.parseDouble(webcontainerPoolUpper) * 100)
-							+ " %");
+			if (webcontainerPoolUsed != null && webcontainerPoolUpper != null) {
+				map.put("WC池已用",
+						Math.round(Double.parseDouble(webcontainerPoolUsed)
+								/ Double.parseDouble(webcontainerPoolUpper) * 100)
+								+ " %");
+			}
 			String servletLiveSessions = getStrFromListJSON(JSONPath.read(json,
 					"$..servletSessionsModule.LiveCount.value"));
 			map.put("本地会话数", servletLiveSessions);
-			map = parseWarPerf(json, map); // 应用程序会话数
+			map.putAll(parseWarPerf(json)); // 应用程序会话数
+			map.putAll(parseJDBCPerf(json)); // JDBC连接池
 		}
 		return map;
 	}
@@ -1940,8 +2000,8 @@ public final class PerfReader extends JFrame implements Runnable {
 	 * @param map
 	 * @return
 	 */
-	private Map<String, String> parseWarPerf(String json,
-			Map<String, String> map) {
+	private Map<String, String> parseWarPerf(String json) {
+		Map<String, String> map = new LinkedHashMap<String, String>();
 		Object obj = JSONPath.read(json, "$perf_data");
 		if (obj instanceof JSONObject) {
 			JSONObject jsonObj = (JSONObject) obj;
@@ -1959,6 +2019,65 @@ public final class PerfReader extends JFrame implements Runnable {
 									((JSONObject) objLiveCount).get("value")
 											.toString());
 						}
+					}
+				}
+			}
+		}
+		return map;
+	}
+	
+	/**
+	 * 获取数据库连接池统计
+	 * @param json
+	 * @param map
+	 * @return
+	 */
+	private Map<String, String> parseJDBCPerf(String json) {
+		Map<String, String> map = new LinkedHashMap<String, String>();
+		Object obj = JSONPath.read(json, "$perf_data");
+		if (obj instanceof JSONObject) {
+			JSONObject jsonObj = (JSONObject) obj;
+			Set<String> key = jsonObj.keySet();
+			Iterator<String> itrKey = key.iterator();
+			while (itrKey.hasNext()) {
+				String currKey = itrKey.next();
+				Object objItem = jsonObj.get(currKey);
+				if (objItem instanceof JSONObject) {
+					JSONObject item = (JSONObject) objItem;
+					if (item.keySet().contains("JDBCTime")) { // 包含JDBCTime项说明为JDBC性能指标
+						int jdbcPoolUpperBound = 0; // 连接池最大阀值
+						int jdbcPoolCurrent = 0; // 连接池当前大小(当前已经建立的数据库连接数)
+						int jdbcFreeConnections = 0; // 连接池中的空闲连接数
+						Object objPoolSize = item.get("PoolSize");
+						if (objPoolSize != null && objPoolSize instanceof JSONObject) {
+							JSONObject poolSize = (JSONObject) objPoolSize;
+							String sUpperBound = (String) poolSize.get("upperBound");
+							if (sUpperBound != null) {
+								jdbcPoolUpperBound = Integer.parseInt(sUpperBound);
+							}
+							String sPoolCurrent = (String) poolSize.get("value");
+							if (sPoolCurrent != null) {
+								jdbcPoolCurrent = Integer.parseInt(sPoolCurrent);
+							}
+							if (jdbcPoolUpperBound == 0 && jdbcPoolCurrent == 0) continue; // 若两者都为0,则退出
+							if (jdbcPoolUpperBound == 0) jdbcPoolUpperBound = jdbcPoolCurrent; // 池大小以当前值为准
+						}
+						Object objFreePoolSize = item.get("FreePoolSize");
+						if (objFreePoolSize != null && objFreePoolSize instanceof JSONObject) {
+							JSONObject freePoolSize = (JSONObject) objFreePoolSize;
+							String sFreePoolSize = (String) freePoolSize.get("value");
+							if (sFreePoolSize != null) {
+								jdbcFreeConnections = Integer.parseInt(sFreePoolSize);
+							}
+						}
+						map.put(currKey + "_jdbc_pool", // 后面添加的_jdbc_pool用于区分当前列是连接池统计信息
+								Math.round((jdbcPoolCurrent - jdbcFreeConnections)
+										* 100.0 / jdbcPoolUpperBound)
+										+ "% ("
+										+ Integer.toString(jdbcPoolCurrent
+												- jdbcFreeConnections)
+										+ " / "
+										+ jdbcPoolUpperBound + ")");
 					}
 				}
 			}
