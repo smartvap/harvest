@@ -28,7 +28,6 @@ import java.net.URL;
 import java.net.UnknownHostException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
@@ -962,7 +961,6 @@ public final class PerfReader extends JFrame implements Runnable {
 	private static class NaviPanel extends JPanel {
 		private static final long serialVersionUID = 924411562858994237L;
 		private IconNode root; // 根节点
-//		private DefaultTreeModel treeModel;
 		private static JTree tree = null;
 		private Set<Entry<String, Section>> dmgrs = null; // 加载的配置数据
 		private JPopupMenu popMenu = null; // 弹出菜单
@@ -1441,7 +1439,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			
 			/* 设置上下分割窗 */
 			JSplitPane vSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT); // 垂直分割，分两个Tab页展现
-			vSplitPane.setDividerLocation(0.5); // 分割比例
+			vSplitPane.setDividerLocation(PerfReader.self.getSize().height / 2); // 分割比例
 			vSplitPane.setBackground(Color.gray);
 			JTabbedPane tabbedUp = new JTabbedPane(); // 上选项卡
 			tabbedUp.addTab("核心性能列表", new JScrollPane(table));
@@ -1487,17 +1485,18 @@ public final class PerfReader extends JFrame implements Runnable {
 				Set<String> setJDBCEach = new LinkedHashSet<String>();
 				Set<String> setCol = each.keySet();
 				for (String col : setCol) {
-					if (col.equals("node_name") || col.equals("server_name")) {
+					if (col.equals("节点名") || col.equals("服务名称")) {
 						setKernEach.add(col);
 						setJDBCEach.add(col);
 					} else {
-						if (col.indexOf("_jdbc_pool") != -1) setJDBCEach.add(col);
+						if (col.indexOf("_jdbc_pool") != -1) setJDBCEach.add(col.substring(0, col.indexOf("_jdbc_pool")));
 						else setKernEach.add(col);
 					}
 				}
 				setKern.addAll(setKernEach); // 列合并
 				setJDBC.addAll(setJDBCEach);
 			}
+
 			Object[] colNamesKern = setKern.toArray();
 			Object[] colNamesJDBC = setJDBC.toArray();
 			Object[][] valuesKern = new Object[data.size()][colNamesKern.length];
@@ -1507,7 +1506,10 @@ public final class PerfReader extends JFrame implements Runnable {
 					valuesKern[row][col] = data.get(row).get(colNamesKern[col]);
 				}
 				for (int col = 0; col < colNamesJDBC.length; col++) {
-					valuesJDBC[row][col] = data.get(row).get(colNamesJDBC[col]);
+					if (colNamesJDBC[col].equals("节点名") || colNamesJDBC[col].equals("服务名称"))
+						valuesJDBC[row][col] = data.get(row).get(colNamesJDBC[col]);
+					else
+						valuesJDBC[row][col] = data.get(row).get(colNamesJDBC[col] + "_jdbc_pool");
 				}
 			}
 			DefaultTableModel modelKern = new DefaultTableModel(valuesKern, colNamesKern);
@@ -1516,13 +1518,14 @@ public final class PerfReader extends JFrame implements Runnable {
 			tableJDBC.setModel(modelJDBC);
 			fitTableColumns(table); // 调整列宽
 			fitTableColumns(tableJDBC);
-			highLight(); // 高亮异常指标
+			highLightKernal(); // 高亮异常指标
+			highLightJDBC();
 		}
 		
 		/**
-		 * 高亮异常指标
+		 * 高亮异常指标(核心指标)
 		 */
-		public void highLight() {
+		public void highLightKernal() {
 			
 			DefaultTableCellRenderer highLight = new DefaultTableCellRenderer() {
 				private static final long serialVersionUID = -8848303924674335966L;
@@ -1563,6 +1566,52 @@ public final class PerfReader extends JFrame implements Runnable {
 
 			TableColumn wcCol = table.getColumn("WC池已用");
 			wcCol.setCellRenderer(highLight);
+		}
+		
+		/**
+		 * 高亮异常指标(JDBC指标)
+		 */
+		public void highLightJDBC() {
+			
+			DefaultTableCellRenderer highLight = new DefaultTableCellRenderer() {
+				private static final long serialVersionUID = -8848303924674335966L;
+
+				public void setValue(Object value) { // 重写setValue方法，从而可以动态设置列单元字体颜色
+					if (value == null || value.equals("")) { // 数据未读取到
+						setForeground(Color.RED);
+						MyLineBorder myLineBorder = new MyLineBorder(Color.RED,
+								1, true);
+						setBorder(myLineBorder);
+						setText("数据异常");
+						return;
+					}
+					int perc = 0;
+					try {
+						if (((String) value).indexOf("%") > 0) {
+							perc = Integer.parseInt(((String) value).split("%")[0]);
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+					if (perc > 90) {
+						setForeground(Color.RED);
+						MyLineBorder myLineBorder = new MyLineBorder(Color.RED,
+								1, true);
+						setBorder(myLineBorder);
+					} else {
+						setForeground(Color.BLACK);
+					}
+					setText(value.toString());
+				}
+			};
+			int colNum = tableJDBC.getColumnCount();
+			for (int i = 0; i < colNum; i++) {
+				String colName = tableJDBC.getColumnName(i);
+				if (!colName.equals("节点名")
+						&& colName.equals("服务名称")) {
+					tableJDBC.getColumn(colName).setCellRenderer(highLight);
+				}
+			}
 		}
 
 		/**
