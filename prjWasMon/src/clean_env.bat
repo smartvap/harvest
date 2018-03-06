@@ -1,0 +1,13 @@
+@echo off
+
+echo 开始清理注册表配置...
+reg delete "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v JAVA_HOME /f
+echo 允许powershell运行本地未签名脚本...
+powershell -command {Set-ExecutionPolicy RemoteSigned}
+echo 广播消息[环境改变]...
+powershell -file broadcast_environment.ps1 1>nul 2>nul
+echo 开始清理内存中的环境变量...
+set JAVA_HOME=
+set reg_value=
+
+@echo on
