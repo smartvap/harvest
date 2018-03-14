@@ -26,6 +26,11 @@ import java.net.SocketAddress;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,11 +55,9 @@ import javax.management.ObjectName;
 import javax.management.ReflectionException;
 import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
-import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -63,14 +66,12 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
-import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
+import javax.swing.JSlider;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
-import javax.swing.JTextField;
 import javax.swing.JTree;
-import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.LineBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -88,6 +89,7 @@ import org.ini4j.Ini;
 import org.ini4j.InvalidFileFormatException;
 import org.ini4j.Profile.Section;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.JSONPath;
 import com.ibm.websphere.management.AdminClient;
@@ -95,7 +97,6 @@ import com.ibm.websphere.management.AdminClientFactory;
 import com.ibm.websphere.management.exception.ConnectorException;
 import com.ibm.websphere.pmi.stat.StatDescriptor;
 import com.ibm.websphere.pmi.stat.WSStats;
-import com.jidesoft.field.IPTextField;
 
 public final class PerfReader extends JFrame implements Runnable {
 
@@ -103,6 +104,9 @@ public final class PerfReader extends JFrame implements Runnable {
 	
 	private static final Logger logger = Logger.getLogger("WasMon");
 
+	/**
+	 * 需要加载的性能模块
+	 */
 	private static String[] modules = new String[] { "jvmRuntimeModule",
 			"threadPoolModule", "servletSessionsModule", "connectionPoolModule" };
 	
@@ -116,138 +120,24 @@ public final class PerfReader extends JFrame implements Runnable {
 	private PerfReader() {
 		self = this;
 		setTitle("WebSphere 监控平台");
-		Dimension scrSz = Toolkit.getDefaultToolkit().getScreenSize();
+		Dimension scrSz = Toolkit.getDefaultToolkit().getScreenSize(); // 获取屏幕尺寸
 		Insets screenInsets = Toolkit.getDefaultToolkit().getScreenInsets(
-				getGraphicsConfiguration());
+				getGraphicsConfiguration()); // 获取任务栏高度
 		setSize((int) scrSz.getWidth(),
-				(int) (scrSz.getHeight() - screenInsets.bottom));
+				(int) (scrSz.getHeight() - screenInsets.bottom)); // 设置大小为满屏
 		setResizable(false); // 窗体不可最小化
-		setLocation(0, 0);
-		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setLocation(0, 0); // 窗体位置
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // 设置窗体退出行为
 
 		JSplitPane hSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT); // 水平分割栏
 		hSplitPane.setDividerLocation(getSize().width / 8); // 分割比例
-		hSplitPane.setBackground(Color.gray);
+		hSplitPane.setBackground(Color.gray); // 设置背景
 		getContentPane().add(hSplitPane, BorderLayout.CENTER); // 添加分割栏
 		hSplitPane.setLeftComponent(new NaviPanel()); // 左侧导航栏，所有WebSphere集群
 		hSplitPane.setRightComponent(new PerfPanel()); // 右侧性能指标列表
-		setVisible(true);
+		setVisible(true); // 打开窗体
 	}
 
-	/**
-	 * 自定义标签
-	 * 
-	 * @author Hugh
-	 * 
-	 */
-	private static class CustomizedLabel extends JLabel {
-		private static final long serialVersionUID = 4326986450195469329L;
-
-		private CustomizedLabel(String title) {
-			setText(title);
-			setVerticalAlignment(SwingConstants.CENTER);
-			setHorizontalAlignment(SwingConstants.RIGHT);
-		}
-	}
-
-	/**
-	 * 自定义文本框
-	 * 
-	 * @author Hugh
-	 * 
-	 */
-	private static class CustomizedTextField extends JTextField {
-		private static final long serialVersionUID = -5853388661248106217L;
-
-		private CustomizedTextField(String text) {
-			setText(text);
-			setAlignmentX(CENTER_ALIGNMENT);
-			setAlignmentY(LEFT_ALIGNMENT);
-			Font font = new Font(getFont().getName(), getFont().getStyle(),
-					getFont().getSize() + 3); // 字体较原有字体放大
-			setFont(font);
-		}
-	}
-	
-	/**
-	 * 自定义选择框
-	 * @author heqiming
-	 *
-	 */
-	private static class CustomizedComboBox extends JComboBox {
-		private static final long serialVersionUID = 8704402336624915239L;
-
-		private CustomizedComboBox(String[] content) {
-			super(content);
-			Font font = new Font(getFont().getName(), getFont().getStyle(),
-					getFont().getSize() + 3); // 字体较原有字体放大
-			setFont(font);
-			setSelectedIndex(0); // 默认选择第一条记录
-		}
-	}
-	
-	/**
-	 * 自定义单选按钮
-	 * @author heqiming
-	 *
-	 */
-	private static class CustomizedButtonGroup extends ButtonGroup {
-		private static final long serialVersionUID = -7567378104850647317L;
-
-		private CustomizedButtonGroup(String[] options) {
-			for (String option : options) {
-				JRadioButton radio = new JRadioButton(option);
-				add(radio);
-				if (option.equals(options[0])) radio.setSelected(true); // 默认选择第一项
-			}
-		}
-		
-		private String getSelectedOption() {
-			Enumeration<AbstractButton> enumBtns = getElements();
-			while (enumBtns.hasMoreElements()) {
-				AbstractButton absBtn = enumBtns.nextElement();
-				if (absBtn.isSelected()) return absBtn.getText();
-			}
-			return null;
-		}
-	}
-	
-	/**
-	 * 自定义路径文本框
-	 * @author heqiming
-	 *
-	 */
-	private static class CustomizedPathField extends JTextField {
-		private static final long serialVersionUID = 5256743147024587008L;
-
-		private CustomizedPathField(String fileName) {
-			URL url = getClass().getClassLoader().getResource(fileName); // 从当前类路径下搜索
-			if (url == null)
-				return; // 若获取不到,则不做任何改变
-			File file = new File(url.getFile()); // 根据url获取File对象
-			String absPath = file.getAbsolutePath(); // 根据File获取文件绝对路径
-			setText(absPath);
-			Font font = new Font(getFont().getName(), getFont().getStyle(),
-					getFont().getSize() + 3); // 设置字体较原有字体放大
-			setFont(font);
-			setAlignmentX(RIGHT_ALIGNMENT);
-		}
-	}
-	
-	/**
-	 * 自定义IP文本框(使用JIDE)
-	 * @author heqiming
-	 *
-	 */
-	private static class CustomizedIPField extends IPTextField {
-		private static final long serialVersionUID = 7606495762236505574L;
-
-		private CustomizedIPField() {
-			Font font = new Font(getFont().getName(), getFont().getStyle(),
-					getFont().getSize() + 3); // 设置字体较原有字体放大
-			setFont(font);
-		}
-	}
 
 	/**
 	 * dmgr服务配置对话框(新建/修改)
@@ -261,28 +151,31 @@ public final class PerfReader extends JFrame implements Runnable {
 
 		private static DlgDmgrConfig self = null; // 对自身对象的引用
 		
-		private CustomizedIPField txtHost = new CustomizedIPField(); // DMGR服务IP地址文本框
-		//private CustomizedTextField txtMask = new CustomizedTextField("32"); // 掩码位
-		private CustomizedTextField txtPort = new CustomizedTextField("8879"); // 端口文本框
-		private CustomizedComboBox cmbConnTyp = new CustomizedComboBox(
+		private JControls.CustomizedIPField txtHost = new JControls.CustomizedIPField(); // DMGR服务IP地址文本框
+		//private CustomizedTextField txtMask = new CustomizedTextField("32"); // 掩码位, 用以批量加载
+		private JControls.CustomizedTextField txtPort = new JControls.CustomizedTextField("8879"); // 端口文本框
+		private JControls.CustomizedComboBox cmbConnTyp = new JControls.CustomizedComboBox(
 				new String[] { "SOAP", "JMX", "WSADMIN" }); // 连接类型
-		private CustomizedButtonGroup btnGrpIfSec = new CustomizedButtonGroup(
+		private JControls.CustomizedButtonGroup btnGrpIfSec = new JControls.CustomizedButtonGroup(
 				new String[] { "是", "否" }); // 单选按钮
 		private JPasswordField txtUserName = new JPasswordField("wasadmin"); // 用户名
 		private JPasswordField txtPassword = new JPasswordField("WebJ2ee"); // 密码
-		private CustomizedPathField txtTrustStorPath = new CustomizedPathField(
+		private JControls.CustomizedPathField txtTrustStorPath = new JControls.CustomizedPathField(
 				"DummyClientTrustFile.jks"); // 信任证书
-		private CustomizedPathField txtKeyStorPath = new CustomizedPathField(
+		private JControls.CustomizedPathField txtKeyStorPath = new JControls.CustomizedPathField(
 				"DummyClientKeyFile.jks"); // 信任证书
-		private CustomizedComboBox cmbKeyStorTyp = new CustomizedComboBox(
+		private JControls.CustomizedComboBox cmbKeyStorTyp = new JControls.CustomizedComboBox(
 				new String[] { "JKS", "JCEKS", "PKCS12" }); // 密钥类型
 		private JPasswordField txtTrustStorPass = new JPasswordField("WebAS"); // 证书密码
 		private JPasswordField txtKeyStorPass = new JPasswordField("WebAS"); // 密钥库密码
-		private CustomizedComboBox cmbCategory = new CustomizedComboBox(
+		private JControls.CustomizedComboBox cmbCategory = new JControls.CustomizedComboBox(
 				new String[] { "营业厅CRM前台", "客服CRM", "应用4A", "一级BOSS", "主动业务探测",
 						"版本测试", "便利店", "自助终端", "终端管理平台", "商城", "清欠",
-						"imsportal", "ESOP", "省内SP类", "支付宝", "移动工作台", "局数据", "其他" }); // 系统归类，显示为二级目录
+						"imsportal", "ESOP", "省内SP类", "支付宝", "移动工作台", "局数据",
+						"第三代", "其他" }); // 系统归类，显示为二级目录
 		private JLabel txtClusterAlias = new JLabel(""); // 服务集群别名,建立dmgr连接时根据获取的cell名称得到,不可操作
+		private JControls.CustomizedJSlider sldReloadInterval = new JControls.CustomizedJSlider(
+				JSlider.HORIZONTAL); // 刷新频率滑动条, 0-不自动刷新, 1~10建立独立线程自动刷新
 		private boolean state = false; // 对话框返回状态码
 		
 		/**
@@ -304,6 +197,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			map.put("keyStorPass", new String(txtKeyStorPass.getPassword()));
 			map.put("category", (String) cmbCategory.getSelectedItem());
 			map.put("clusterAlias", txtClusterAlias.getText());
+			map.put("reloadInterval", Integer.toString(sldReloadInterval.getValue()));
 			return map;
 		}
 
@@ -322,7 +216,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.ipady = 20;
 
 			// 第一行
-			jpBasic.add(new CustomizedLabel("主机IP:")); // 元素0
+			jpBasic.add(new JControls.CustomizedLabel("主机IP:")); // 元素0
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.1;
 			gbc.weighty = 1.0;
@@ -337,7 +231,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(2), gbc);
-			jpBasic.add(new CustomizedLabel("服务端口:")); // 元素3
+			jpBasic.add(new JControls.CustomizedLabel("服务端口:")); // 元素3
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.1;
 			gbc.weighty = 1.0;
@@ -362,7 +256,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(5), gbc);
-			jpBasic.add(new CustomizedLabel("连接类型:")); // 元素6
+			jpBasic.add(new JControls.CustomizedLabel("连接类型:")); // 元素6
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.1;
 			gbc.weighty = 1.0;
@@ -388,7 +282,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(8), gbc);
 			// 第二行
-			jpBasic.add(new CustomizedLabel("安全连接:")); // 元素9
+			jpBasic.add(new JControls.CustomizedLabel("安全连接:")); // 元素9
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
@@ -421,7 +315,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(12), gbc);
-			jpBasic.add(new CustomizedLabel("dmgr账号:")); // 元素13
+			jpBasic.add(new JControls.CustomizedLabel("dmgr账号:")); // 元素13
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
@@ -446,7 +340,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(15), gbc);
-			jpBasic.add(new CustomizedLabel("dmgr密码:")); // 元素16
+			jpBasic.add(new JControls.CustomizedLabel("dmgr密码:")); // 元素16
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
@@ -472,7 +366,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(18), gbc);
 			// 第三行
-			jpBasic.add(new CustomizedLabel("信任证书:")); // 元素19
+			jpBasic.add(new JControls.CustomizedLabel("信任证书:")); // 元素19
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
@@ -532,7 +426,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(21), gbc);
-			jpBasic.add(new CustomizedLabel("密钥:")); // 元素22
+			jpBasic.add(new JControls.CustomizedLabel("密钥:")); // 元素22
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
@@ -592,7 +486,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(24), gbc);
-			jpBasic.add(new CustomizedLabel("密钥类型:")); // 元素25
+			jpBasic.add(new JControls.CustomizedLabel("密钥类型:")); // 元素25
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
@@ -618,7 +512,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(27), gbc);
 			// 第四行
-			jpBasic.add(new CustomizedLabel("证书密码:")); // 元素28
+			jpBasic.add(new JControls.CustomizedLabel("证书密码:")); // 元素28
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
@@ -643,7 +537,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(30), gbc);
-			jpBasic.add(new CustomizedLabel("密钥密码:")); // 元素31
+			jpBasic.add(new JControls.CustomizedLabel("密钥密码:")); // 元素31
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
@@ -668,7 +562,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(33), gbc);
-			jpBasic.add(new CustomizedLabel("系统归类:")); // 元素34
+			jpBasic.add(new JControls.CustomizedLabel("系统归类:")); // 元素34
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
@@ -683,62 +577,78 @@ public final class PerfReader extends JFrame implements Runnable {
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(36), gbc);
-			// 第6行校准行
-			jpBasic.add(new Container()); // 元素37
+			// 第6行
+			jpBasic.add(new JControls.CustomizedLabel("刷新频率:")); // 元素31
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(37), gbc);
-			jpBasic.add(new Container()); // 元素35
-			gbc.gridwidth = 1;
+			jpBasic.add(sldReloadInterval); // 元素36
+			gbc.gridwidth = 2;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(38), gbc);
-			jpBasic.add(new Container()); // 元素36
-			gbc.gridwidth = 1;
+			jpBasic.add(new Container()); // 元素44
+			gbc.gridwidth = 0;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(39), gbc);
+			// 第7行校准行
 			jpBasic.add(new Container()); // 元素37
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(40), gbc);
-			jpBasic.add(new Container()); // 元素38
+			jpBasic.add(new Container()); // 元素35
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(41), gbc);
-			jpBasic.add(new Container()); // 元素39
+			jpBasic.add(new Container()); // 元素36
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(42), gbc);
-			jpBasic.add(new Container()); // 元素40
+			jpBasic.add(new Container()); // 元素37
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(43), gbc);
-			jpBasic.add(new Container()); // 元素41
+			jpBasic.add(new Container()); // 元素38
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(44), gbc);
-			jpBasic.add(new Container()); // 元素42
+			jpBasic.add(new Container()); // 元素39
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(45), gbc);
-			jpBasic.add(new Container()); // 元素43
+			jpBasic.add(new Container()); // 元素40
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(46), gbc);
-			jpBasic.add(new Container()); // 元素44
+			jpBasic.add(new Container()); // 元素41
 			gbc.gridwidth = 1;
 			gbc.weightx = 0.0;
 			gbc.weighty = 1.0;
 			gbl.setConstraints(jpBasic.getComponent(47), gbc);
+			jpBasic.add(new Container()); // 元素42
+			gbc.gridwidth = 1;
+			gbc.weightx = 0.0;
+			gbc.weighty = 1.0;
+			gbl.setConstraints(jpBasic.getComponent(48), gbc);
+			jpBasic.add(new Container()); // 元素43
+			gbc.gridwidth = 1;
+			gbc.weightx = 0.0;
+			gbc.weighty = 1.0;
+			gbl.setConstraints(jpBasic.getComponent(49), gbc);
+			jpBasic.add(new Container()); // 元素44
+			gbc.gridwidth = 1;
+			gbc.weightx = 0.0;
+			gbc.weighty = 1.0;
+			gbl.setConstraints(jpBasic.getComponent(50), gbc);
 
 			return jpBasic;
 		}
@@ -961,9 +871,305 @@ public final class PerfReader extends JFrame implements Runnable {
 	private static class NaviPanel extends JPanel {
 		private static final long serialVersionUID = 924411562858994237L;
 		private IconNode root; // 根节点
-		private static JTree tree = null;
-		private Set<Entry<String, Section>> dmgrs = null; // 加载的配置数据
+		private static JTree tree = null; // 导航树
+		private static Set<Entry<String, Section>> dmgrs = null; // 加载的配置数据{[主机IP,主机配置项],...}
+		private static Map<String, ThrReload> mapReloadThreads = new LinkedHashMap<String, ThrReload>(); // 刷新线程映射表<主机IP, 刷新线程>
+		private static Connection connDerby = null; // 性能仓库连接
 		private JPopupMenu popMenu = null; // 弹出菜单
+		
+		public static void main(String[] args) {
+			initDBConnection();
+			initSchema();
+			initTables();
+			initConstraints();
+		}
+		
+		/**
+		 * 根据host获取dmgr连接配置
+		 * @param host
+		 * @return
+		 */
+		private static Section getCfgByHost(String host) {
+			Iterator<Entry<String, Section>> itr = dmgrs.iterator(); // 遍历dmgr配置数据
+			while (itr.hasNext()) {
+				Entry<String, Section> ent = itr.next();
+				if (ent.getKey().equals(host)) { // 检索与当前树节点ID匹配的记录
+					return ent.getValue();
+				}
+			}
+			return null;
+		}
+		
+		/**
+		 * 初始化性能仓库连接
+		 */
+		private static void initDBConnection() {
+			try {
+				if (connDerby != null && !connDerby.isClosed()) {
+					return;
+				}
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			String driver = "org.apache.derby.jdbc.ClientDriver";
+			String url = "jdbc:derby://localhost:1527/perfDB;create=true";
+			try {
+				Class.forName(driver);
+				connDerby = DriverManager.getConnection(url, "emma", "watson");
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+		/**
+		 * 初始化schema
+		 */
+		private static void initSchema() {
+			ResultSet rs = null;
+			boolean bSchema = false;
+			try {
+				rs = connDerby.getMetaData().getSchemas(); // 从元数据获取所有schema
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			try {
+				while (rs.next()) { // 查询schema
+					if (rs.getString(1).toUpperCase().equals("PERF")) {
+						bSchema = true;
+						break;
+					}
+				}
+				rs.close();
+				rs = null;
+				if (!bSchema) { // 若找不到schema则创建schema
+					Statement stmt = connDerby.createStatement();
+					stmt.execute("CREATE SCHEMA PERF AUTHORIZATION emma");
+					connDerby.commit();
+					stmt.close();
+					stmt = null;
+				}
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		/**
+		 * 初始化表结构
+		 */
+		private static void initTables() {
+			ResultSet rs = null;
+			Statement stmt = null;
+			try {
+				stmt = connDerby.createStatement();
+				rs = stmt
+						.executeQuery("SELECT 1 FROM sys.systables t1, sys.sysschemas t2 "
+								+ "WHERE t1.tablename = 'PERF_WEBSPHERE' AND t1.schemaid = t2.schemaid");
+				connDerby.commit();
+				if (!rs.next()) {
+					stmt.execute("CREATE TABLE PERF.PERF_WEBSPHERE("
+							+ "ID BIGINT NOT NULL,"
+							+ "CREATE_TIME TIMESTAMP NOT NULL,"
+							+ "PERF_DATA CLOB NOT NULL,"
+							+ "CONSTRAINT PK_PERF_WEBSPHERE PRIMARY KEY (ID)"
+							+ ")");
+				}
+				rs.close();
+				rs = null;
+				stmt.close();
+				stmt = null;
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		/**
+		 * 初始化约束
+		 */
+		private static void initConstraints() {
+			ResultSet rs = null;
+			Statement stmt = null;
+			try {
+				// 添加主键/唯一索引
+				stmt = connDerby.createStatement();
+				rs = stmt
+						.executeQuery("SELECT 1 FROM sys.sysconstraints t1, sys.systables t2 "
+								+ "WHERE t1.tableid = t2.tableid AND t1.constraintname = 'PK_PERF_WEBSPHERE' "
+								+ "AND t1.type = 'P'");
+				connDerby.commit();
+				if (!rs.next()) {
+					stmt.execute("ALTER TABLE perf.perf_websphere ADD CONSTRAINT PK_PERF_WEBSPHERE "
+							+ "PRIMARY KEY (ID)");
+				}
+				rs.close();
+				rs = null;
+				stmt.close();
+				stmt = null;
+				// 添加时间索引
+				stmt = connDerby.createStatement();
+				rs = stmt
+						.executeQuery("SELECT * FROM sys.sysconglomerates t1, sys.systables t2 "
+								+ "WHERE t1.tableid = t2.tableid AND t2.tablename = 'PERF_WEBSPHERE' AND "
+								+ "t1.conglomeratename = 'IDX_PERF_WEBSPHERE_TIME'");
+				connDerby.commit();
+				if (!rs.next()) {
+					stmt.execute("CREATE INDEX IDX_PERF_WEBSPHERE_TIME ON PERF.PERF_WEBSPHERE("
+							+ "CREATE_TIME desc)");
+				}
+				rs.close();
+				rs = null;
+				stmt.close();
+				stmt = null;
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		/**
+		 * 初始化序列
+		 */
+		private static void initSequence() {
+			
+		}
+		
+		/**
+		 * 清理表结构
+		 */
+		private static void destroyTable() {
+			try {
+				Statement stmt = connDerby.createStatement();
+				ResultSet rs = stmt
+						.executeQuery("SELECT 1 FROM sys.systables t1, sys.sysschemas t2 "
+								+ "WHERE t1.tablename = 'PERF_WEBSPHERE' AND t1.schemaid = t2.schemaid AND "
+								+ "t2.schemaname = 'PERF'");
+				connDerby.commit();
+				if (rs.next()) { // 若存在则删表
+					stmt.execute("DROP TABLE PERF.PERF_WEBSPHERE");
+				}
+				rs.close();
+				rs = null;
+				stmt.close();
+				stmt = null;
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		/**
+		 * 清理schema
+		 */
+		private static void destroySchema() {
+			try {
+				Statement stmt = connDerby.createStatement();
+				ResultSet rs = stmt
+						.executeQuery("SELECT 1 FROM sys.sysschemas WHERE schemaname = 'PERF'");
+				connDerby.commit();
+				if (rs.next()) {
+					stmt.execute("DROP SCHEMA PERF RESTRICT");
+				}
+				rs.close();
+				rs = null;
+				stmt.close();
+				stmt = null;
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+		/**
+		 * 从数据库获取最新的性能数据
+		 * @return
+		 */
+//		private static List<Map<String, String>> getLatestPerfDataFromDB() {
+//			try {
+//				if (connDerby == null || connDerby.isClosed()) initDBConnection();
+//				if (connDerby == null || connDerby.isClosed()) return null;
+//			} catch (SQLException e) {
+//				e.printStackTrace();
+//			}
+//			Statement stmt = connDerby.createStatement();
+//			ResultSet rs = stmt.executeQuery("SELECT perf_data FROM app.perf_websphere WHERE ");
+//			return null;
+//		}
+		
+		private static void writePerfData2DB(List<Map<String, String>> data) {
+			if (data == null) return;
+			String serializedData = JSON.toJSONString(data, true);
+			
+		}
+		
+		/**
+		 * 获取或初始化AdminClient连接
+		 * @param host
+		 * @param sect
+		 * @return
+		 */
+		private static AdminClient getOrInitDmgrConnections(String host,
+				Section sect) {
+			if (host == null || sect == null)
+				return null; // 若找不到配置,则退出
+			if (!mapConn.containsKey(host + ":" + sect.get("port"))) { // 若在dmgr连接映射表中不存在,则建立新的连接,并记录到连接映射表
+				AdminClient ac = PerfReader.self.createConnection(host,
+						sect.get("port"), sect.get("connTyp"),
+						sect.get("ifSec"), sect.get("userName"),
+						sect.get("password"), sect.get("trustStorPath"),
+						sect.get("keyStorPath"), sect.get("keyStorType"),
+						sect.get("trustStorPass"), sect.get("keyStorPass"));
+				if (ac == null)
+					return null;
+			}
+			return mapConn.get(host + ":" + sect.get("port")); // 获取dmgr连接
+		}
+		
+		/**
+		 * 从dmgr获取最新性能数据
+		 * @param host
+		 * @param sect
+		 * @return
+		 */
+		private static List<Map<String, String>> getPerfDataFromDmgr(
+				AdminClient ac, String host, Section sect) {
+			List<Map<String, Object>> list = PerfReader.self.qrySrvPerf(ac); // 查询性能数据
+			List<Map<String, String>> listFormat = new ArrayList<Map<String, String>>();
+			for (Map<String, Object> map : list) {
+				String json = JsonUtil.toJson(map);
+				Map<String, String> m = PerfReader.self.formatSrvPerf(json,
+						MOD_FULL);
+				listFormat.add(m);
+			}
+			return listFormat;
+		}
+		
+		private static class ThrReload implements Runnable {
+			private String host = null; // 主机IP
+			private int interval = 0; // 刷新时间间隔
+
+			private ThrReload(String para0, int para1) {
+				host = para0;
+				interval = para1;
+			}
+
+			@Override
+			public void run() {
+				while (true) {
+					if (interval != 0) { // 启动定时任务
+						// 1.从derby查询最新数据
+						// 2.若未找到,查询dmgr,系列化,写入derby
+						// 3.
+						try {
+							Thread.sleep(interval * 1000);
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					} else {
+						try {
+							Thread.sleep(1000);
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					}
+				}
+			}
+
+		}
 		
 		/**
 		 * 排序器: 按照key值排序
@@ -1051,6 +1257,7 @@ public final class PerfReader extends JFrame implements Runnable {
 			ini.put(host, "keyStorPass", mapCnf.get("keyStorPass"));
 			ini.put(host, "category", mapCnf.get("category"));
 			ini.put(host, "clusterAlias", mapCnf.get("clusterAlias"));
+			ini.put(host, "reloadInterval", mapCnf.get("reloadInterval"));
 			try {
 				ini.store(file); // 保存文件
 			} catch (IOException e1) {
@@ -1411,8 +1618,6 @@ public final class PerfReader extends JFrame implements Runnable {
 		}
 
 		private PerfPanel() {
-//			if (getComponentCount() == 1) // 重置性能视图
-//				remove(0);
 			/* 核心性能列表 */
 			Object data[][] = new Object[1][1]; // 初始状态
 			if (table == null)
