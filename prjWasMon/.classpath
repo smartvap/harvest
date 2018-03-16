@@ -20,6 +20,5 @@
 	<classpathentry kind="lib" path="libs/bootstrap.jar"/>
 	<classpathentry kind="lib" path="libs/javassist-3.15.0-GA.jar"/>
 	<classpathentry kind="lib" path="libs/derby/derbyclient.jar"/>
-	<classpathentry kind="lib" path="libs/com.ibm.ws.orb_7.0.0.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
