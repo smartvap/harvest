@@ -18,7 +18,7 @@ public class IconNodeRenderer extends DefaultTreeCellRenderer {
 		Icon icon = ((IconNode) value).getIcon();
 		String txt = ((IconNode) value).getText();
 		if (expanded && !txt.equals("È«Íø"))
-			icon = new ImageIcon(getClass().getResource("Opened_Folder.png"));
+			icon = new ImageIcon(getClass().getClassLoader().getResource("Opened_Folder.png"));
 		setIcon(icon);
 		setText(txt);
 		setBackground(Color.LIGHT_GRAY); // ±³¾°É«

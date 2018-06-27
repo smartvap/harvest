@@ -1439,7 +1439,7 @@ public class PerfReader extends JFrame implements Runnable {
 		}
 
 		private NaviPanel() {
-			root = new IconNode(new ImageIcon(getClass().getResource(
+			root = new IconNode(new ImageIcon(getClass().getClassLoader().getResource(
 					"whole_network.png")), "全网");
 			tree = new JTree(root); // 创建树
 			tree.setForeground(Color.LIGHT_GRAY); // 前景色
@@ -1464,7 +1464,7 @@ public class PerfReader extends JFrame implements Runnable {
 					}
 				}
 				if (nodeCat == null) { // 若未找到,则新创建类别节点,并添加到树
-					nodeCat = new IconNode(new ImageIcon(getClass()
+					nodeCat = new IconNode(new ImageIcon(getClass().getClassLoader()
 							.getResource("Closed_Folder.png")), category);
 					root.add(nodeCat);
 				}
@@ -1475,7 +1475,7 @@ public class PerfReader extends JFrame implements Runnable {
 						return;
 					}
 				}
-				IconNode nodeDmgr = new IconNode(new ImageIcon(getClass()
+				IconNode nodeDmgr = new IconNode(new ImageIcon(getClass().getClassLoader()
 						.getResource("WebSphere.png")), dmgrId); // 创建dmgr服务节点
 				nodeCat.add(nodeDmgr); // 添加节点
 			}
